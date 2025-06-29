@@ -2,6 +2,7 @@
 namespace Aurire\AiMcpAnalysis;
 
 use Aurire\AiMcpAnalysis\Commands\AiMcpAnalysisCommand;
+use Aurire\AiMcpAnalysis\Core\ProjectDetector;
 use Illuminate\Support\ServiceProvider;
 
 class AiMcpAnalysisServiceProvider extends ServiceProvider
@@ -22,6 +23,8 @@ class AiMcpAnalysisServiceProvider extends ServiceProvider
         $this->app->singleton('ai-mcp-analysis', function ($app) {
             return new Services\AiMcpAnalysisService();
         });
+        $this->app->singleton(Core\ProjectDetector::class);
+        $this->app->singleton(Core\ToolRegistry::class);
     }
 
     /**
@@ -43,5 +46,19 @@ class AiMcpAnalysisServiceProvider extends ServiceProvider
                 AiMcpAnalysisCommand::class,
             ]);
         }
+
+        if (config('ai-mcp-analysis.auto_detect_project')) {
+            $this->registerProjectAdapter();
+        }
+    }
+
+    protected function registerProjectAdapter(): void
+    {
+        /** @var ProjectDetector $detector */
+        $detector = $this->app->make(Core\ProjectDetector::class);
+        $projectType = $detector->detectProjectType();
+
+        // Register appropriate adapter based on detection
+        // Implementation coming next...
     }
 }

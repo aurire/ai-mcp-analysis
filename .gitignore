@@ -2,8 +2,10 @@ composer.lock
 /vendor
 /.env
 /.phpunit.result.cache
+/.phpunit.cache
 /.vscode
-/.idea
+/.idea/
 /.php_cs.cache
 /.phpunit
 /.phpunit.xml
+/LOCAL-NOTES.md

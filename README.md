@@ -1,6 +1,18 @@
 # AI MCP Analysis for laravel
 
-A Laravel library package for AI Laravel project analysis using MCP.
+A Laravel library for AI-powered architectural analysis using MCP (Model Context Protocol).
+
+## Features
+- Multi-project architectural analysis
+- AI-enhanced code intelligence
+- Operational workflow integration
+- Extensible adapter pattern for different project types
+
+## Example Adapters
+- E-commerce platforms
+- API services
+- Admin dashboards
+- You name it
 
 ## Installation
 
@@ -15,6 +27,20 @@ Publish the configuration file:
 ```bash
 php artisan vendor:publish --tag=ai-mcp-analysis-config
 ```
+
+## Company-Specific Implementation
+This package provides the framework. Create your own adapters for your specific projects:
+
+```php
+class YourProjectAdapter extends AbstractProjectAdapter 
+{
+    public function getProjectPatterns(): array 
+    {
+        return ['your', 'specific', 'patterns'];
+    }
+}
+```
+
 ## Usage
 ```php
 use Aurire\AiMcpAnalysis\Facades\AiMcpAnalysis;
