@@ -2,188 +2,297 @@
 
 declare(strict_types=1);
 
-namespace Aurire\AiMcpAnalysis\Tools;
+namespace AuriRe\AiMcpAnalysis\Tools;
 
-use Aurire\AiMcpAnalysis\Core\ParameterNormalizer;
-use Aurire\AiMcpAnalysis\Core\ProjectDetector;
-use Aurire\AiMcpAnalysis\Analysis\StructureAnalyzer;
-use Aurire\AiMcpAnalysis\Analysis\DomainAnalyzer;
-use Aurire\AiMcpAnalysis\Analysis\RecommendationEngine;
-use PhpMcp\Server\Attributes\McpTool;
+use AuriRe\AiMcpAnalysis\Adapters\AbstractProjectAdapter;
+use AuriRe\AiMcpAnalysis\Core\ParameterNormalizer;
+use InvalidArgumentException;
+use Exception;
 
+/**
+ * ProjectAnalyzer - Main MCP tool interface for the AI MCP Analysis Library
+ * 
+ * Provides a unified interface for project analysis using domain-specific adapters.
+ * Handles parameter normalization and delegates to appropriate adapters.
+ */
 class ProjectAnalyzer
 {
-    private ProjectDetector $projectDetector;
-    private StructureAnalyzer $structureAnalyzer;
-    private DomainAnalyzer $domainAnalyzer;
-    private RecommendationEngine $recommendationEngine;
-    private ?array $cachedAnalysis = null;
+    private AbstractProjectAdapter $adapter;
 
-    public function __construct(
-        ProjectDetector $projectDetector = null,
-        StructureAnalyzer $structureAnalyzer = null,
-        DomainAnalyzer $domainAnalyzer = null,
-        RecommendationEngine $recommendationEngine = null
-    ) {
-        $this->projectDetector = $projectDetector ?? new ProjectDetector();
-        $this->structureAnalyzer = $structureAnalyzer ?? new StructureAnalyzer();
-        $this->domainAnalyzer = $domainAnalyzer ?? new DomainAnalyzer($this->projectDetector);
-        $this->recommendationEngine = $recommendationEngine ?? new RecommendationEngine();
+    public function __construct(AbstractProjectAdapter $adapter)
+    {
+        $this->adapter = $adapter;
     }
 
     /**
-     * Comprehensive Laravel project analysis
+     * Analyze a single file
      */
-    #[McpTool(description: 'Comprehensive Laravel project analysis with domain-specific insights')]
-    public function analyzeProject(mixed $options = null): array
+    public function analyzeFile(string $filePath): array
     {
-        // Use ParameterNormalizer to handle various input formats
-        $normalizedOptions = ParameterNormalizer::normalize($options, 'options');
-        $options = is_array($normalizedOptions) ? $normalizedOptions : [];
-
-        // Check cache unless forced refresh
-        if ($this->cachedAnalysis !== null && !($options['force_refresh'] ?? false)) {
-            return $this->cachedAnalysis;
-        }
-
-        $startTime = microtime(true);
-        $errors = [];
-
         try {
-            // Get project characteristics
-            $projectInfo = $this->projectDetector->getProjectCharacteristics();
-
-            // Perform structure analysis
-            $structureAnalysis = $this->structureAnalyzer->analyze();
-
-            // Perform domain-specific analysis
-            $domainAnalysis = $this->domainAnalyzer->analyze();
-
-            // Build comprehensive result
-            $analysisResult = [
-                'project_info' => $projectInfo,
-                'structure_analysis' => $structureAnalysis,
-                'patterns_detected' => $this->detectPatterns(),
-                'domain_specific_analysis' => $domainAnalysis,
-                'security_considerations' => $this->getSecurityConsiderations($projectInfo, $domainAnalysis), // Add this
-                'analysis_metadata' => [
-                    'analysis_time' => round((microtime(true) - $startTime) * 1000, 2),
-                    'analyzer_version' => '1.0.0',
-                    'detection_confidence' => $this->projectDetector->getDetectionConfidence(),
-                    'analysis_timestamp' => now()->toISOString(),
-                    'errors' => $errors
-                ]
-            ];
-
-            // Add external tool results if requested
-            if ($options['include_external_analysis'] ?? false) {
-                $analysisResult['external_tool_results'] = $this->getExternalToolResults();
-            }
-
-            // Generate recommendations
-            $analysisResult['recommendations'] = $this->recommendationEngine
-                ->generateRecommendations($analysisResult);
-
-            // Cache the result
-            $this->cachedAnalysis = $analysisResult;
-
-            return $analysisResult;
-
-        } catch (\Exception $e) {
-            $errors[] = [
-                'type' => 'analysis_error',
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ];
-
-            // Return partial results on error
+            return $this->adapter->analyzeFile($filePath);
+        } catch (Exception $e) {
             return [
-                'project_info' => ['name' => 'unknown', 'type' => 'unknown'],
-                'structure_analysis' => [],
-                'patterns_detected' => [],
-                'domain_specific_analysis' => [],
-                'recommendations' => [],
-                'analysis_metadata' => [
-                    'analysis_time' => round((microtime(true) - $startTime) * 1000, 2),
-                    'analyzer_version' => '1.0.0',
-                    'analysis_timestamp' => now()->toISOString(),
-                    'errors' => $errors,
-                    'status' => 'partial_failure'
-                ]
+                'success' => false,
+                'error' => $e->getMessage(),
+                'file_path' => $filePath,
+                'adapter_type' => $this->adapter->getProjectType()
             ];
         }
     }
 
     /**
-     * Detect general patterns
+     * List files in directory with filtering
      */
-    private function detectPatterns(): array
+    public function listFiles(string $directory = 'app', ?string $filter = null): array
     {
-        // This could be expanded with more sophisticated pattern detection
+        return $this->adapter->listFiles($directory, $filter);
+    }
+
+    /**
+     * Search for domain-specific patterns
+     */
+    public function searchPatterns(string $directory = 'app'): array
+    {
+        return $this->adapter->searchDomainPatterns($directory);
+    }
+
+    /**
+     * Get analysis recommendations
+     */
+    public function getRecommendations(array $analysis): array
+    {
+        return $this->adapter->getRecommendations($analysis);
+    }
+
+    /**
+     * Generate project summary
+     */
+    public function generateSummary(string $directory = 'app'): array
+    {
+        return $this->adapter->generateProjectSummary($directory);
+    }
+
+    /**
+     * Check adapter compatibility
+     */
+    public function checkCompatibility(string $projectPath = ''): array
+    {
+        $projectPath = $projectPath ?: base_path();
+        $score = $this->adapter->getCompatibilityScore($projectPath);
+        
         return [
-            'mvc_pattern' => 'detected',
-            'service_layer_pattern' => 'partial',
-            'repository_pattern' => 'not_detected'
+            'adapter_type' => $this->adapter->getProjectType(),
+            'compatibility_score' => $score,
+            'is_compatible' => $this->adapter->isCompatible($projectPath),
+            'project_path' => $projectPath
         ];
     }
 
     /**
-     * Get external tool results (placeholder for future integration)
+     * Get adapter information
      */
-    private function getExternalToolResults(): array
+    public function getAdapterInfo(): array
     {
         return [
-            'code_quality_metrics' => [
-                'phpstan_analysis' => 'not_implemented',
-                'phpcs_analysis' => 'not_implemented',
-                'phpmd_analysis' => 'not_implemented'
-            ],
-            'security_analysis' => [
-                'psalm_security' => 'not_implemented'
-            ]
+            'project_type' => $this->adapter->getProjectType(),
+            'allowed_paths' => $this->adapter->getAllowedPaths(),
+            'restricted_files' => $this->adapter->getRestrictedFiles(),
+            'domain_patterns' => $this->adapter->getDomainPatterns(),
+            'config' => $this->adapter->getConfig()
         ];
     }
 
-    private function getSecurityConsiderations(array $projectInfo, array $domainAnalysis): array
+    /**
+     * Update adapter configuration
+     */
+    public function updateConfig(array $config): void
     {
-        $considerations = [];
+        $normalizedConfig = ParameterNormalizer::normalizeParameters($config);
+        $this->adapter->updateConfig($normalizedConfig);
+    }
 
-        $projectType = $projectInfo['type'] ?? 'unknown';
-
-        switch ($projectType) {
-            case 'ecommerce':
-                $considerations = [
-                    'payment_data_security' => 'Ensure PCI compliance for payment processing',
-                    'user_data_protection' => 'Implement proper encryption for sensitive customer data',
-                    'session_security' => 'Secure cart sessions and prevent session hijacking'
-                ];
-                break;
-
-            case 'api_service':
-                $considerations = [
-                    'authentication_security' => 'Implement proper API authentication',
-                    'rate_limiting' => 'Add rate limiting to prevent abuse',
-                    'input_validation' => 'Validate all API inputs to prevent injection attacks'
-                ];
-                break;
-
-            case 'admin_dashboard':
-                $considerations = [
-                    'authorization_checks' => 'Implement proper role-based access control',
-                    'csrf_protection' => 'Ensure CSRF protection on all admin forms',
-                    'audit_logging' => 'Log all administrative actions'
-                ];
-                break;
-
-            default:
-                $considerations = [
-                    'general_security' => 'Implement basic Laravel security best practices',
-                    'input_validation' => 'Validate all user inputs',
-                    'authentication' => 'Secure user authentication system'
-                ];
+    /**
+     * Analyze multiple files in batch
+     */
+    public function batchAnalyze(array $filePaths): array
+    {
+        $results = [];
+        $errors = [];
+        
+        foreach ($filePaths as $filePath) {
+            try {
+                $results[$filePath] = $this->analyzeFile($filePath);
+            } catch (Exception $e) {
+                $errors[$filePath] = $e->getMessage();
+            }
         }
+        
+        return [
+            'total_files' => count($filePaths),
+            'successful_analyses' => count($results),
+            'failed_analyses' => count($errors),
+            'results' => $results,
+            'errors' => $errors
+        ];
+    }
 
-        return $considerations;
+    /**
+     * Search across all files in directory
+     */
+    public function searchInFiles(string $searchTerm, string $directory = 'app', bool $caseSensitive = false): array
+    {
+        // This would use the structure analyzer from the adapter
+        // For now, we'll delegate to the adapter's structure analyzer
+        $structureAnalyzer = $this->adapter->getStructureAnalyzer();
+        
+        // Note: This method would need to be added to StructureAnalyzer
+        // For the MVP, we'll return a placeholder
+        return [
+            'search_term' => $searchTerm,
+            'directory' => $directory,
+            'case_sensitive' => $caseSensitive,
+            'adapter_type' => $this->adapter->getProjectType(),
+            'note' => 'Search functionality to be implemented in StructureAnalyzer'
+        ];
+    }
+
+    /**
+     * Validate project structure
+     */
+    public function validateStructure(): array
+    {
+        $compatibility = $this->checkCompatibility();
+        $summary = $this->generateSummary();
+        $recommendations = [];
+        
+        // Generate structural recommendations
+        if ($compatibility['compatibility_score'] < 0.8) {
+            $recommendations[] = [
+                'type' => 'structure',
+                'priority' => 'medium',
+                'message' => 'Project structure does not fully match expected patterns for ' . $this->adapter->getProjectType()
+            ];
+        }
+        
+        if ($summary['total_files'] < 5) {
+            $recommendations[] = [
+                'type' => 'coverage',
+                'priority' => 'low',
+                'message' => 'Very few files detected. Check if analysis directory is correct.'
+            ];
+        }
+        
+        return [
+            'validation_results' => [
+                'structure_valid' => $compatibility['is_compatible'],
+                'compatibility_score' => $compatibility['compatibility_score'],
+                'file_count' => $summary['total_files'],
+                'category_distribution' => $summary['category_distribution'] ?? []
+            ],
+            'recommendations' => $recommendations,
+            'adapter_type' => $this->adapter->getProjectType()
+        ];
+    }
+
+    /**
+     * Get detailed project metrics
+     */
+    public function getProjectMetrics(): array
+    {
+        $summary = $this->generateSummary();
+        $compatibility = $this->checkCompatibility();
+        
+        return [
+            'project_info' => [
+                'type' => $this->adapter->getProjectType(),
+                'compatibility_score' => $compatibility['compatibility_score'],
+                'total_files' => $summary['total_files'],
+                'total_size_kb' => $summary['total_size_kb'],
+                'average_complexity' => $summary['average_complexity']
+            ],
+            'distribution' => [
+                'by_category' => $summary['category_distribution'] ?? [],
+                'by_domain' => $summary['domain_distribution'] ?? []
+            ],
+            'quality_metrics' => [
+                'complexity_threshold' => $this->adapter->getConfig()['complexity_threshold'] ?? 10,
+                'high_complexity_files' => $this->countHighComplexityFiles($summary)
+            ],
+            'timestamp' => date('Y-m-d H:i:s')
+        ];
+    }
+
+    /**
+     * Count files with high complexity
+     */
+    private function countHighComplexityFiles(array $summary): int
+    {
+        // This would require analyzing individual files
+        // For MVP, return estimated count based on average
+        $threshold = $this->adapter->getConfig()['complexity_threshold'] ?? 10;
+        $avgComplexity = $summary['average_complexity'] ?? 0;
+        
+        if ($avgComplexity > $threshold) {
+            return (int) round($summary['total_files'] * 0.3); // Estimate 30% are high complexity
+        }
+        
+        return 0;
+    }
+
+    /**
+     * Create analysis report
+     */
+    public function createReport(string $directory = 'app', bool $includeRecommendations = true): array
+    {
+        $report = [
+            'report_meta' => [
+                'generated_at' => date('Y-m-d H:i:s'),
+                'adapter_type' => $this->adapter->getProjectType(),
+                'directory_analyzed' => $directory,
+                'library_version' => '1.0.0'
+            ],
+            'project_summary' => $this->generateSummary($directory),
+            'compatibility_analysis' => $this->checkCompatibility(),
+            'structure_validation' => $this->validateStructure(),
+            'project_metrics' => $this->getProjectMetrics()
+        ];
+        
+        if ($includeRecommendations) {
+            // Collect recommendations from various analyses
+            $allRecommendations = [];
+            
+            // Add structural recommendations
+            $allRecommendations = array_merge(
+                $allRecommendations,
+                $report['structure_validation']['recommendations'] ?? []
+            );
+            
+            $report['recommendations'] = [
+                'total_recommendations' => count($allRecommendations),
+                'by_priority' => $this->groupRecommendationsByPriority($allRecommendations),
+                'details' => $allRecommendations
+            ];
+        }
+        
+        return $report;
+    }
+
+    /**
+     * Group recommendations by priority
+     */
+    private function groupRecommendationsByPriority(array $recommendations): array
+    {
+        $grouped = ['high' => 0, 'medium' => 0, 'low' => 0];
+        
+        foreach ($recommendations as $rec) {
+            $priority = $rec['priority'] ?? 'medium';
+            if (isset($grouped[$priority])) {
+                $grouped[$priority]++;
+            }
+        }
+        
+        return $grouped;
     }
 }
+
